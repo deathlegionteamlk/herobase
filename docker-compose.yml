@@ -1,0 +1,105 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: herobase
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  auth:
+    image: supabase/gotrue:v2.158.0
+    depends_on:
+      - db
+    environment:
+      API_EXTERNAL_URL: http://localhost:9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:postgrespassword@db:5432/herobase?search_path=auth
+      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_JWT_SECRET: herobase-secret-key-at-least-32-characters-long
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+    ports:
+      - "9999:9999"
+
+  rest:
+    image: postgrest/postgrest:v12.2.0
+    depends_on:
+      - db
+    environment:
+      PGRST_DB_URI: postgres://authenticator:authenticatorpassword@db:5432/herobase
+      PGRST_DB_SCHEMA: public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: herobase-secret-key-at-least-32-characters-long
+    ports:
+      - "3000:3000"
+
+  graphql:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:22-slim
+        RUN npm install -g postgraphile
+        ENTRYPOINT ["postgraphile"]
+    depends_on:
+      - db
+    command:
+      - --preset
+      - postgraphile/presets/amber
+      - -c
+      - postgres://postgres:postgrespassword@db:5432/herobase
+      - --schema
+      - public
+      - --port
+      - 5000
+      - --watch
+    ports:
+      - "5000:5000"
+
+  realtime:
+    build: ./services/realtime
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      JWT_SECRET: herobase-secret-key-at-least-32-characters-long
+    ports:
+      - "4000:4000"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  storage:
+    build: ./services/storage
+    depends_on:
+      - minio
+    environment:
+      JWT_SECRET: herobase-secret-key-at-least-32-characters-long
+      S3_ENDPOINT: http://minio:9000
+    ports:
+      - "5001:5001"
+
+  functions:
+    build: ./services/functions
+    environment:
+      JWT_SECRET: herobase-secret-key-at-least-32-characters-long
+    ports:
+      - "5002:5002"
+
+  dashboard:
+    build: ./apps/dashboard
+    ports:
+      - "3001:3001"
+    environment:
+      NEXT_PUBLIC_HEROBASE_URL: http://localhost:3000
+      NEXT_PUBLIC_AUTH_URL: http://localhost:9999
