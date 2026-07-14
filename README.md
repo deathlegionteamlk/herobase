@@ -182,3 +182,7 @@ MIT — do what you want with it. See [LICENSE](./LICENSE) for the full text.
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=14&duration=4000&pause=1000&color=6366F1&center=true&vCenter=true&width=400&lines=PostgreSQL+was+right+all+along.;Self-host+everything.;Star+⭐+if+you+find+this+useful!" alt="Footer typing" />
 
 </div>
+
+<!-- DL Code Badge -->
+![Status](https://img.shields.io/badge/status-active-success?style=flat-square)
+
